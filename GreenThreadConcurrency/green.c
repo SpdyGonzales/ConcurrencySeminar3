@@ -222,7 +222,6 @@ void green_cond_init(green_cond_t* cond){
 void green_cond_wait(green_cond_t* cond){
 	green_t *toSuspend = running;
 	if(toSuspend == NULL){printf("toSuspend är null");}
-	return;
 	struct green_t *next = deQueue(readyQueue);
 	if(next == NULL){
 		next = &main_green;
