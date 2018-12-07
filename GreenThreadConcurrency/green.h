@@ -10,7 +10,8 @@ typedef struct green_t {
 } green_t;
 
 typedef struct green_cond_t{
-	struct Queue *q;
+	struct green_t *first;
+    int count;
 }green_cond_t;
 
 typedef struct Queue 
