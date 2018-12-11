@@ -24,47 +24,42 @@ int queueCount = 0;
 
 int blocked = FALSE;
 
-int countQueue(struct green_t *first) {
 
-    if (first != NULL) {
-        struct green_t *node = first;
-        int threads = 1;
+/* int countQueue(struct green_t *first) { */
 
-        while (node->next != NULL) {
-            node = node->next;
-            threads++;
-        }
-        return threads;
-    }
-    return 0;
-}
+/*     if (first != NULL) { */
+/*         struct green_t *node = first; */
+/*         int threads = 1; */
+
+/*         while (node->next != NULL) { */
+/*             node = node->next; */
+/*             threads++; */
+/*         } */
+/*         return threads; */
+/*     } */
+/*     return 0; */
+/* } */
 
 void *enqueue(struct green_t *thread) {
-    /* if (thread == NULL) */
-    /*     return; */
-    /* if (queueCount == 0) { */
     if (firstInQueue == NULL) {
         firstInQueue = thread;
-        queueCount++;
+        //queueCount++;
         return;
     }
     struct green_t *node = firstInQueue;
-    int i = 1;
-    while (i < queueCount) {
+    //int i = 1;
+    while (node->next != NULL) {
+        //printf("%p\n",node->next);
         node = node->next;
-        i++;
     }
-    /* while (node->next != NULL) { */
-    /*     node = node->next; */
-    /* } */
     node->next = thread;
-    queueCount++;
     return;
 }
 struct green_t *dequeue() {
     struct green_t *node = firstInQueue;
     firstInQueue = node->next;
-    queueCount--;
+    //queueCount--;
+    node->next = NULL;
     return node;
 }
 
@@ -313,9 +308,9 @@ void green_cond_signal(green_cond_t* cond){
     if (cond->first == NULL)
         return;
 
-    queueCount = queueCount + cond->count -1;
+    //queueCount = queueCount + cond->count -1;
     enqueue(cond->first);
-    cond->count = 0;
+    //cond->count = 0;
     cond->first = NULL;
 
     //sigprocmask(SIG_UNBLOCK, &block, NULL);
@@ -332,8 +327,8 @@ int green_mutex_lock(green_mutex_t *mutex) {
     green_t *susp = running;
     while(mutex->taken) {
         //suspend running thread
-        if (mutex->count == 0) {
-            printf("ISNULL");
+        if (mutex->susp == NULL) {
+            //printf("ISNULL");
             mutex->susp = susp;
         } else {
             struct green_t *node = mutex->susp;
@@ -342,7 +337,6 @@ int green_mutex_lock(green_mutex_t *mutex) {
             }
             node->next = susp;
         }
-
 
         //find next thread
         struct green_t *next = dequeue();
@@ -363,13 +357,13 @@ int green_mutex_unlock(green_mutex_t *mutex) {
     //move suspended threads to ready q
     if (mutex->susp != NULL) {
         struct green_t *node = mutex->susp;
-        int threads = 1;
+        //int threads = 1;
 
         while (node->next != NULL) {
             node = node->next;
-            threads++;
+            //threads++;
         }
-        queueCount = queueCount + threads -1;
+        //queueCount = queueCount + threads -1;
         enqueue(mutex->susp);
     }
 
