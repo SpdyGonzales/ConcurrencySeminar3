@@ -40,7 +40,10 @@ int countQueue(struct green_t *first) {
 }
 
 void *enqueue(struct green_t *thread) {
-    if (queueCount == 0) {
+    /* if (thread == NULL) */
+    /*     return; */
+    /* if (queueCount == 0) { */
+    if (firstInQueue == NULL) {
         firstInQueue = thread;
         queueCount++;
         return;
@@ -51,6 +54,9 @@ void *enqueue(struct green_t *thread) {
         node = node->next;
         i++;
     }
+    /* while (node->next != NULL) { */
+    /*     node = node->next; */
+    /* } */
     node->next = thread;
     queueCount++;
     return;
@@ -189,49 +195,15 @@ void green_cond_init(green_cond_t* cond){
     cond->count = 0;
 }
 
-/* void green_cond_wait(green_cond_t* cond){ */
-/*     //thread says: i want to suspend and wait for this condition to occur */
-/*     // */
-/*     // not "susp and put me in ready queue", but susp and wait for condition */
-/*     // so each cond needs a leeeeeeethreads waiting for it */
-/*     green_t *toSuspend = running; */
-
-
-/*     sigprocmask(SIG_BLOCK, &block, NULL); */
-
-/*     struct green_t *next = dequeue(); */
-/*     running = next; */
-
-/*     if (cond->count == 0) { */
-/*         cond->first = toSuspend; */
-/*     } else { */
-/*         struct green_t *node = cond->first; */
-/*         int i = 0; */
-/*         while (i < cond->count) { */
-/*             node = node->next; */
-/*             i++; */
-/*         } */
-/*         node->next = toSuspend; */
-/*     } */
-/*         cond->count++; */
-
-/*     swapcontext(toSuspend->context, next->context); */
-/* } */
-void green_cond_wait(green_cond_t* cond, green_mutex_t *mutex){
-    sigprocmask(SIG_BLOCK, &block, NULL);
-
+void green_cond_simple_wait(green_cond_t* cond){
+    //thread says: i want to suspend and wait for this condition to occur
+    //
+    // not "susp and put me in ready queue", but susp and wait for condition
+    // so each cond needs a leeeeeeethreads waiting for it
     green_t *toSuspend = running;
 
-        if (mutex != NULL) {
-            //release lock if we have mutex
-            mutex->taken = FALSE;
 
-            //schedule suspended threads
-            enqueue(mutex->susp);
-            //count?
-            queueCount += countQueue(firstInQueue);
-            queueCount--;
-        }
+    sigprocmask(SIG_BLOCK, &block, NULL);
 
     struct green_t *next = dequeue();
     running = next;
@@ -250,33 +222,103 @@ void green_cond_wait(green_cond_t* cond, green_mutex_t *mutex){
         cond->count++;
 
     swapcontext(toSuspend->context, next->context);
+}
+
+void green_cond_wait(green_cond_t* cond, green_mutex_t *mutex) {
+    sigprocmask(SIG_BLOCK, &block, NULL);
+    struct green_t* suspend = running;
+    if (cond->first != NULL) {
+        suspend->next = cond->first;
+    }
+    cond->first = suspend;
+
+    if (mutex != NULL) {
+        mutex->taken = FALSE;
+        enqueue(mutex->susp);
+        mutex->susp = NULL;
+        mutex->count = 0;
+    }
+
+    struct green_t* next = dequeue();
+    running = next;
+    swapcontext(suspend->context, next->context);
 
     if(mutex != NULL) {
+        //green_mutex_lock(mutex);
         while (mutex->taken) {
-            toSuspend->next = mutex->susp;
-            mutex->susp = toSuspend;
+            //take cond instead?
+            suspend->next = mutex->susp;
+            mutex->susp = suspend;
+            /* suspend->next = cond->first; */
+            /* cond->first = suspend; */
         }
-        //take lock
         mutex->taken = TRUE;
     }
+
     sigprocmask(SIG_UNBLOCK, &block, NULL);
-    return 0;
 }
+/* void green_cond_wait(green_cond_t* cond, green_mutex_t *mutex){ */
+/*     sigprocmask(SIG_BLOCK, &block, NULL); */
+
+/*     green_t *toSuspend = running; */
+
+/*     if (cond->count == 0) { */
+/*         cond->first = toSuspend; */
+/*     } else { */
+/*         struct green_t *node = cond->first; */
+/*         int i = 0; */
+/*         while (i < cond->count) { */
+/*             node = node->next; */
+/*             i++; */
+/*         } */
+/*         node->next = toSuspend; */
+/*     } */
+/*         cond->count++; */
+
+/*         if (mutex != NULL) { */
+/*             //release lock if we have mutex */
+/*             mutex->taken = FALSE; */
+
+/*             //schedule suspended threads */
+/*             enqueue(mutex->susp); */
+/*             mutex->susp = NULL; */
+/*             //count? */
+/*             queueCount += countQueue(firstInQueue); */
+/*             //queueCount += countQueue(mutex->susp); */
+/*             queueCount--; */
+/*             queueCount--; */
+/*         } */
+
+/*     struct green_t *next = dequeue(); */
+/*     running = next; */
+
+/*     swapcontext(toSuspend->context, next->context); */
+
+/*     if(mutex != NULL) { */
+/*         while (mutex->taken) { */
+/*             toSuspend->next = mutex->susp; */
+/*             mutex->susp = toSuspend; */
+/*         } */
+/*         //take lock */
+/*         mutex->taken = TRUE; */
+/*     } */
+/*     sigprocmask(SIG_UNBLOCK, &block, NULL); */
+/*     return 0; */
+/* } */
 
 void green_cond_signal(green_cond_t* cond){
     //release ALL threads
+    sigprocmask(SIG_BLOCK, &block, NULL);
 
     if (cond->first == NULL)
         return;
-
-    /* sigprocmask(SIG_BLOCK, &block, NULL); */
 
     queueCount = queueCount + cond->count -1;
     enqueue(cond->first);
     cond->count = 0;
     cond->first = NULL;
 
-    sigprocmask(SIG_UNBLOCK, &block, NULL);
+    //sigprocmask(SIG_UNBLOCK, &block, NULL);
 }
 
 int green_mutex_init(green_mutex_t *mutex) {
@@ -333,6 +375,8 @@ int green_mutex_unlock(green_mutex_t *mutex) {
 
     //release lock
     mutex->taken = FALSE;
+    mutex->count = 0;
+    mutex->susp = NULL;
 
     sigprocmask(SIG_UNBLOCK, &block, NULL);
     return 0;
